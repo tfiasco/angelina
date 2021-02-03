@@ -1,12 +1,15 @@
 use std::borrow::BorrowMut;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::rc::Rc;
 
+use crate::datamodel::edge::Edge;
 use crate::parser::ast::Expr::{BinaryOp, UnaryOp};
-use crate::parser::ast::{EdgeExpr, Expr, GraphPath, GraphTriplet, Statement, VertexExpr};
+use crate::parser::ast::{Expr, GraphTriplet, Statement};
 use crate::parser::ast::{GraphPattern, Value};
 use crate::parser::keyword::Keyword;
+use crate::parser::keyword::Keyword::KEY;
 use crate::parser::operator::{BinaryOperator, UnaryOperator};
 use crate::parser::parser::ParserError::TokenizerError;
 use crate::parser::tokenizer::{Token, Tokenizer};
@@ -80,7 +83,7 @@ impl Parser {
 
     fn parse_select(&mut self) -> Result<Statement, ParserError> {
         let exprs = self.parse_separated(&Token::Comma, |parser| parser.parse_expr())?;
-        let from = if self.match_and_consume_token(&Token::Keyword(Keyword::FROM)) {
+        let graph_pattern = if self.match_and_consume_token(&Token::Keyword(Keyword::FROM)) {
             self.parse_graph_pattern()?
         } else {
             GraphPattern { triplets: vec![] }
@@ -92,7 +95,7 @@ impl Parser {
         };
         Ok(Statement::Select {
             items: exprs,
-            from,
+            graph_pattern,
             condition,
         })
     }
@@ -436,19 +439,15 @@ impl Parser {
                     // a.b.c, a.b.*
                     Token::Dot => {
                         let mut ident_vec = vec![s.to_string()];
+                        if self.match_and_consume_keywords(&[Keyword::LABEL]) {
+                            return Ok(Expr::LabelExpr(s.to_string()));
+                        }
+                        if self.match_and_consume_keywords(&[Keyword::ID]) {
+                            return Ok(Expr::IdExpr(s.to_string()));
+                        }
                         loop {
                             match self.consume_token() {
                                 Token::Identifier(ss) => ident_vec.push(ss),
-                                Token::Keyword(Keyword::LABEL) => {
-                                    return Ok(Expr::LabelExpr(Box::new(Expr::Identifier(
-                                        s.to_string(),
-                                    ))));
-                                }
-                                Token::Keyword(Keyword::ID) => {
-                                    return Ok(Expr::IdExpr(Box::new(Expr::Identifier(
-                                        s.to_string(),
-                                    ))));
-                                }
                                 Token::Star => return Ok(Expr::CompoundWildcard(ident_vec)),
                                 token => {
                                     self.prev_token();

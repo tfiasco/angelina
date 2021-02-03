@@ -56,6 +56,19 @@ impl VertexHandler {
         }
     }
 
+    pub fn iter_all_vertices(&self) -> Box<dyn Iterator<Item = Vertex>> {
+        Box::new(
+            self.engine
+                .open_tree(VERTEX_TABLE_NAME)
+                .scan_prefix(&[])
+                .map(|res| {
+                    let (key, value) = res.unwrap();
+                    Vertex::deserialize(&key, &value)
+                })
+                .into_iter(),
+        )
+    }
+
     fn generate_next_prop_id(&self, vertex_id: &str) -> u64 {
         let auto_increment_key = format!("VERTEX_PROP_AUTO_INCREMENT_ID_{}", vertex_id);
         self.engine

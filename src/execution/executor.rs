@@ -2,7 +2,12 @@ use std::ops::Deref;
 use std::rc::Rc;
 
 use crate::datamodel::base::{Cardinality, EdgeMultiplicity};
+use crate::datamodel::vertex::Vertex;
+use crate::execution::memory::ExecutionMemory;
+use crate::execution::operator::Operator;
 use crate::execution::output::QueryOutput;
+use crate::execution::planner::Planner;
+use crate::execution::scope::{Comparator, Scope, VertexPattern};
 use crate::handlers::edge_handler::EdgeHandler;
 use crate::handlers::schema_handler::SchemaHandler;
 use crate::handlers::sled_engine::SledEngine;
@@ -30,7 +35,10 @@ impl QueryExecutor {
         }
     }
 
-    pub fn execute_statement(&self, statement: &Statement) -> Result<QueryOutput, ExecutionError> {
+    pub fn execute_statement(
+        &mut self,
+        statement: &Statement,
+    ) -> Result<QueryOutput, ExecutionError> {
         match statement {
             Statement::CreateVertexLabel { name } => {
                 let id = self.schema_handler.create_vertex_label(&name);
@@ -118,19 +126,33 @@ impl QueryExecutor {
             } => self.execute_insert_vertex(label, properties, vertex_id, values),
             Statement::Select {
                 items,
-                from,
+                graph_pattern,
                 condition,
-            } => self.execute_select(items, from, condition),
+            } => self.execute_select(items, graph_pattern, condition),
             _ => return Err(self.execute_error("not impl".to_string())),
         }
     }
 
     fn execute_select(
-        &self,
+        &mut self,
         items: &Vec<Expr>,
-        from: &GraphPattern,
+        graph_pattern: &GraphPattern,
         condition: &Option<Expr>,
     ) -> Result<QueryOutput, ExecutionError> {
+        let mut planner = Planner::new();
+        let op = planner.build_select_query(items, graph_pattern, condition);
+        // self.execute_operator(&op, &mut ExecutionMemory::new())?;
+        Err(self.execute_error("not impl".to_string()))
+    }
+
+    fn execute_operator(
+        &mut self,
+        operator: &Operator,
+        memory: &mut ExecutionMemory,
+    ) -> Result<Box<dyn Iterator<Item = Vec<String>>>, ExecutionError> {
+        match operator {
+            _ => panic!("todo"),
+        }
         Err(self.execute_error("not impl".to_string()))
     }
 
@@ -180,8 +202,8 @@ impl QueryExecutor {
 
     fn parse_vertex_id(&self, vertex_id: &Expr) -> Result<String, ExecutionError> {
         match vertex_id {
-            Expr::Identifier(s) => Ok(s.to_string()),
-            _ => Err(self.execute_error("not impl".to_string())),
+            Expr::Value(Value::String(s)) => Ok(s.to_string()),
+            _ => Err(self.execute_error("not impl. only string support".to_string())),
         }
     }
 
@@ -202,14 +224,16 @@ mod test {
     use super::*;
 
     fn print_output(output: QueryOutput) {
+        println!("--------------");
         println!("{:?}", output.columns);
         output.items.for_each(|x| println!("{:?}", x));
+        println!("--------------");
     }
 
     #[test]
     fn test_create_schema() {
         let engine = Rc::new(Box::new(SledEngine::new_tmp()));
-        let qe = QueryExecutor::new(engine.clone());
+        let mut qe = QueryExecutor::new(engine.clone());
 
         let stmt = &Parser::parse_sql("CREATE VERTEX LABEL vertex_label").unwrap()[0];
         let output = qe.execute_statement(stmt).unwrap();
@@ -232,6 +256,30 @@ mod test {
         print_output(output);
 
         let stmt = &Parser::parse_sql("SHOW PROPERTY KEY").unwrap()[0];
+        let output = qe.execute_statement(stmt).unwrap();
+        print_output(output);
+    }
+
+    #[test]
+    fn test_insert_vertex() {
+        let engine = Rc::new(Box::new(SledEngine::new_tmp()));
+        let mut qe = QueryExecutor::new(engine.clone());
+
+        let stmt = &Parser::parse_sql("CREATE VERTEX LABEL vertex_label").unwrap()[0];
+        let output = qe.execute_statement(stmt).unwrap();
+        print_output(output);
+
+        let stmt = &Parser::parse_sql("CREATE PROPERTY KEY (prop1, single)").unwrap()[0];
+        let output = qe.execute_statement(stmt).unwrap();
+        print_output(output);
+        let stmt = &Parser::parse_sql("CREATE PROPERTY KEY (prop2, single)").unwrap()[0];
+        let output = qe.execute_statement(stmt).unwrap();
+        print_output(output);
+
+        let stmt = &Parser::parse_sql(
+            "INSERT VERTEX vertex_label PROPERTIES (prop1, prop2) VALUES ('id1'):('v1', 'v2') ",
+        )
+        .unwrap()[0];
         let output = qe.execute_statement(stmt).unwrap();
         print_output(output);
     }

@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::parser::operator::{BinaryOperator, UnaryOperator};
@@ -62,7 +63,7 @@ pub enum Statement {
     /// Select
     Select {
         items: Vec<Expr>,
-        from: GraphPattern,
+        graph_pattern: GraphPattern,
         condition: Option<Expr>,
     },
 }
@@ -132,9 +133,9 @@ pub enum Expr {
     /// (a + b), (a AND b)
     Nested(Box<Expr>),
     /// a.label
-    LabelExpr(Box<Expr>),
+    LabelExpr(String),
     /// a.id
-    IdExpr(Box<Expr>),
+    IdExpr(String),
 }
 
 #[derive(Debug, Clone)]

@@ -9,7 +9,6 @@ pub struct Vertex {
     pub properties: Properties,
 }
 
-
 impl Vertex {
     pub fn serialize(&self) -> (Vec<u8>, Vec<u8>) {
         let key = Self::build_key(&self.id);
@@ -21,7 +20,7 @@ impl Vertex {
 
     pub fn deserialize(key: &[u8], value: &[u8]) -> Self {
         let mut key_buf = Buffer::from(key);
-        key_buf.get_u8();      // SchemaType
+        key_buf.get_u8(); // SchemaType
         let id = key_buf.get_string_utf8();
 
         Self::deserialize_value(&id, value)
